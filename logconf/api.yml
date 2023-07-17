@@ -1,0 +1,21 @@
+- type: log
+  tail_files: true
+  paths:
+    - /logs/**.log
+#  processors:
+#    - script:
+#        lang: javascript
+#        file: /logconf/process.js
+#    - timestamp:
+#        field: timestamp
+#        timezone: Asia/Shanghai
+#        layouts:
+#          - '2006-01-02 15:04:05'
+#          - '2006-01-02 15:04:05.999'
+#        test:
+#          - '2019-06-22 16:33:51'
+#    - drop_fields:
+#        fields: ["timestamp"]
+#        ignore_missing: true
+  fields:
+    log_type: project1

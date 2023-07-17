@@ -6,11 +6,14 @@ services:
     ports:
       - "9100:9100"
       - "8080:8080"
+      - "8090:8090"
     volumes:
-      - "./program:/home"
+      - "./program:/program"
+      - "./logs:/logs"
     restart: always
-    command:
-      - '--collector.processes'
+    entrypoint: "sh /program/start_node_exporter.sh"
+
+
   prometheus:
     image: prom/prometheus:latest
     container_name: "prometheus0"
@@ -25,5 +28,50 @@ services:
     ports:
       - "3000:3000"
     restart: always
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.14.2
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.14.2
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:7.14.2
+    container_name: filebeat
+    user: root
+    volumes:
+      - ./logs:/logs
+      - ./logconf:/logconf
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml
+    command: filebeat -e -d "*"
+    depends_on:
+      - elasticsearch
+      - logstash
 
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.14.2
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    ports:
+      - "5044:5044"
+    depends_on:
+      - elasticsearch
+    mem_reservation: 1000M
+    cpu_count: 1
+  ubuntu:
+    image: ubuntu
+    command: ./webhookserver
+    ports:
+      - "16060:16060"
+    volumes:
+      - "./program:/program"
+    working_dir: /program
 
