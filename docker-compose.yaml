@@ -3,6 +3,7 @@ services:
   mynode:
     image: prom/node-exporter:latest
     container_name: "node0"
+    hostname: "mynode"
     ports:
       - "9100:9100"
       - "8080:8080"
@@ -74,4 +75,13 @@ services:
     volumes:
       - "./program:/program"
     working_dir: /program
+  mydb:
+    restart: always
+    image: amd64/mysql:latest
+    container_name: mydb
+    environment:
+      - "MYSQL_ROOT_PASSWORD=1234567"
+      - "MYSQL_DATABASE=test"
+    ports:
+      - "3306:3306"
 

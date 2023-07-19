@@ -16,6 +16,9 @@ func init() {
 		rotatelogs.WithMaxAge(time.Hour*24*3),
 		rotatelogs.WithRotationTime(24*time.Hour),
 	)
-	logrus.SetFormatter(&logrus.JSONFormatter{})
+
+	logrus.SetFormatter(&logrus.JSONFormatter{
+		TimestampFormat: "2006-01-02T15:04:05.999Z",
+	})
 	logrus.SetOutput(writer)
 }

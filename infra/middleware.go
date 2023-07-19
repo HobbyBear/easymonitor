@@ -31,14 +31,18 @@ func MetricMiddleware(next http.Handler) http.Handler {
 		// 可以在这里进行请求验证、日志记录等操作
 		reqBody, err := httputil.DumpRequest(r, true)
 		if err != nil {
-			log.Errorf("dump request fail err=%s", err)
+			log.WithError(err).Errorf("dump request fail")
 		}
 		now := time.Now()
 		// 调用下一个处理程序
+		RecordServerCount(TypeHTTP, r.Method, r.URL.Path)
 		next.ServeHTTP(rw, r)
 		RecordServerHandlerSeconds(TypeHTTP, r.Method, rw.Status(), r.URL.Path, time.Now().Sub(now).Seconds())
 		if rw.Status() != http.StatusOK {
-			log.Warnf("request fail request=%s code=%d", string(reqBody), rw.statusCode)
+			log.WithFields(log.Fields{
+				"request": string(reqBody),
+				"code":    rw.statusCode,
+			}).Warn("request fail ")
 		}
 	})
 }
