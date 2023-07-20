@@ -2,15 +2,16 @@ package main
 
 import (
 	"easymonitor/infra"
+	"github.com/go-redis/redis"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func main() {
-	infra.RegPrometheusClient()
-	infra.InitHookDb([]*infra.DbInfo{
+	infra.SqlMonitor.InitHookDb([]*infra.DbInfo{
 		{
 			MaxConn: 10,
 			Timeout: 10,
@@ -18,7 +19,7 @@ func main() {
 			DbName:  "test",
 		},
 	})
-	infra.SqlParser.SetFixName(func(name string) string {
+	infra.SqlMonitor.SetFixName(func(name string) string {
 		// 对分表的处理
 		if strings.Contains(name, "t_user_") {
 			return "t_user"
@@ -26,6 +27,20 @@ func main() {
 		return name
 	})
 
+	client := redis.NewClient(&redis.Options{
+		Addr: "192.168.2.6:6379",
+	})
+	infra.RedisMonitor.AddRedisHook(client, "rediscache")
+	infra.RedisMonitor.AddMonitorKey("name")
+	go func() {
+		for {
+			time.Sleep(3 * time.Second)
+			client.Get("name:1213").Result()
+			client.Set("name2", "xch", time.Second*2).Result()
+			infra.LocalDbClient["test"].Exec("select * from api_open;")
+		}
+
+	}()
 	router := http.NewServeMux()
 	// 创建一个处理程序函数
 	handler := http.HandlerFunc(handleRequest)

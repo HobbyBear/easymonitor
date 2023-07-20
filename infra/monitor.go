@@ -14,6 +14,8 @@ const (
 	TypeHTTP = "http"
 
 	TypeMySQL = "mysql"
+
+	TypeRedis = "redis"
 )
 
 var (
@@ -22,7 +24,13 @@ var (
 
 func init() {
 	MetricsReg.MustRegister(serverHandleHistogram, serverHandleCounter, clientHandleHistogram, clientHandleCounter)
+	MetricMonitor.RegPrometheusClient()
 }
+
+type metricMonitor struct {
+}
+
+var MetricMonitor = &metricMonitor{}
 
 var (
 	serverHandleHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -51,7 +59,7 @@ func RecordClientCount(metricType string, method string, name string, peer strin
 	}).Inc()
 }
 
-func RecordClientHandlerSeconds(metricType string, method, name string, peer string, second float64) {
+func (m *metricMonitor) RecordClientHandlerSeconds(metricType string, method, name string, peer string, second float64) {
 	clientHandleHistogram.With(prometheus.Labels{
 		"type": metricType,
 		"op":   method,
@@ -60,7 +68,7 @@ func RecordClientHandlerSeconds(metricType string, method, name string, peer str
 	}).Observe(second)
 }
 
-func RecordServerHandlerSeconds(metricType string, method string, status int, api string, second float64) {
+func (m *metricMonitor) RecordServerHandlerSeconds(metricType string, method string, status int, api string, second float64) {
 	serverHandleHistogram.With(prometheus.Labels{
 		"type":   metricType,
 		"method": method,
@@ -69,7 +77,7 @@ func RecordServerHandlerSeconds(metricType string, method string, status int, ap
 	}).Observe(second)
 }
 
-func RecordServerCount(metricType string, method string, api string) {
+func (m *metricMonitor) RecordServerCount(metricType string, method string, api string) {
 	serverHandleCounter.With(prometheus.Labels{
 		"type":   metricType,
 		"method": method,
@@ -77,7 +85,7 @@ func RecordServerCount(metricType string, method string, api string) {
 	}).Inc()
 }
 
-func RegPrometheusClient() {
+func (m *metricMonitor) RegPrometheusClient() {
 	MetricsReg.MustRegister(
 		collectors.NewGoCollector(
 			collectors.WithGoCollectorRuntimeMetrics(collectors.GoRuntimeMetricsRule{Matcher: regexp.MustCompile("/.*")}),

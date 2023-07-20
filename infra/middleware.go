@@ -35,9 +35,9 @@ func MetricMiddleware(next http.Handler) http.Handler {
 		}
 		now := time.Now()
 		// 调用下一个处理程序
-		RecordServerCount(TypeHTTP, r.Method, r.URL.Path)
+		MetricMonitor.RecordServerCount(TypeHTTP, r.Method, r.URL.Path)
 		next.ServeHTTP(rw, r)
-		RecordServerHandlerSeconds(TypeHTTP, r.Method, rw.Status(), r.URL.Path, time.Now().Sub(now).Seconds())
+		MetricMonitor.RecordServerHandlerSeconds(TypeHTTP, r.Method, rw.Status(), r.URL.Path, time.Now().Sub(now).Seconds())
 		if rw.Status() != http.StatusOK {
 			log.WithFields(log.Fields{
 				"request": string(reqBody),

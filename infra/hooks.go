@@ -6,16 +6,14 @@ import (
 	"database/sql/driver"
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
 )
 
-func registerHookDriver(dbname string, app string) {
-	sql.Register(dbname, Wrap(mysql.MySQLDriver{}, &HookDb{dbName: dbname, app: app}))
+func registerHookDriver(dbname string) {
+	sql.Register(dbname, Wrap(mysql.MySQLDriver{}, &HookDb{dbName: dbname}))
 }
 
 // HookDb satisfies the sql hook.Hooks interface
@@ -36,7 +34,7 @@ const (
 func (h *HookDb) Before(ctx context.Context, query string, args ...interface{}) (context.Context, error) {
 	ctx = context.WithValue(ctx, ctxKeyBeginTime, time.Now())
 
-	tables, op, err := SqlParser.parseTable(query)
+	tables, op, err := SqlMonitor.parseTable(query)
 	if err != nil || op == Unknown {
 		log.WithError(err).WithField(ctxKeySql, query).WithField("op", op).Error("parse sql fail")
 	}
@@ -70,7 +68,7 @@ func (h *HookDb) After(ctx context.Context, query string, args ...interface{}) (
 	tableName := ""
 	if tbnameInf := ctx.Value(ctxKeyTbName); tbnameInf != nil && len(tbnameInf.(string)) != 0 {
 		tableName = tbnameInf.(string)
-		RecordClientHandlerSeconds(TypeMySQL, string(ctx.Value(ctxKeyOp).(SqlOp)), tbnameInf.(string), h.dbName, now.Sub(beginTime).Seconds())
+		MetricMonitor.RecordClientHandlerSeconds(TypeMySQL, string(ctx.Value(ctxKeyOp).(SqlOp)), tbnameInf.(string), h.dbName, now.Sub(beginTime).Seconds())
 	}
 
 	slowquery := false
@@ -89,7 +87,8 @@ func (h *HookDb) After(ctx context.Context, query string, args ...interface{}) (
 		log.WithFields(data).Errorf("mysqlslowlog")
 	}
 	op := ctx.Value(ctxKeyOp).(SqlOp)
-	if !slowquery && ctx.Value(ctxKeyMultiTable).(int) == 1 && op == Select {
+	multitable := ctx.Value(ctxKeyMultiTable)
+	if !slowquery && (multitable != nil && multitable.(int) == 1) && op == Select {
 		data := log.Fields{
 			Cost:        now.Sub(beginTime).Milliseconds(),
 			"query":     truncateKey(1024, query),
@@ -180,10 +179,9 @@ func decorateMySQLConn(conn string) string {
 
 }
 
-func InitHookDb(dbInfos []*DbInfo) {
-	app := filepath.Base(os.Args[0])
+func (s *sqlMonitor) InitHookDb(dbInfos []*DbInfo) {
 	for _, dbInfo := range dbInfos {
-		registerHookDriver(dbInfo.DbName, app)
+		registerHookDriver(dbInfo.DbName)
 		maxConn := dbInfo.MaxConn
 		timeout := 1
 		if dbInfo.Timeout > 0 {

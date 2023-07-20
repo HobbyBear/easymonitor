@@ -15,21 +15,21 @@ const (
 	Unknown SqlOp = "unknown"
 )
 
-type sqlParser struct {
+type sqlMonitor struct {
 	FixTbName func(name string) string
 }
 
-var SqlParser = &sqlParser{}
+var SqlMonitor = &sqlMonitor{}
 
 var defaultFixName = func(name string) string {
 	return name
 }
 
-func (s *sqlParser) SetFixName(f func(name string) string) {
+func (s *sqlMonitor) SetFixName(f func(name string) string) {
 	s.FixTbName = f
 }
 
-func (s *sqlParser) parseTable(sql string) ([]string, SqlOp, error) {
+func (s *sqlMonitor) parseTable(sql string) ([]string, SqlOp, error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, "", err

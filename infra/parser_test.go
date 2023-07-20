@@ -11,5 +11,5 @@ create index t_agency_email_index
     on t_agency (email);
 
 `
-	fmt.Println(SqlParser.parseTable(sql))
+	fmt.Println(SqlMonitor.parseTable(sql))
 }
