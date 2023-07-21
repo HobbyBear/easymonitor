@@ -15,6 +15,14 @@ func main() {
 		}
 		log.Println("收到报警日志", string(data))
 	})
+	http.HandleFunc("/alert_grafana", func(writer http.ResponseWriter, request *http.Request) {
+		request.ParseForm()
+		data, err := ioutil.ReadAll(request.Body)
+		if err != nil {
+			panic(err)
+		}
+		log.Println("收到grafana报警日志", string(data))
+	})
 	log.Println("webhookserver start ")
 	log.Println(http.ListenAndServe(":16060", nil))
 }
