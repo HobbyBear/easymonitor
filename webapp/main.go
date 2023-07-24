@@ -28,6 +28,7 @@ func main() {
 	})
 
 	client := redis.NewClient(&redis.Options{
+		// todo 替换成自己的局域网ip
 		Addr: "192.168.2.6:6379",
 	})
 	infra.RedisMonitor.AddRedisHook(client, "rediscache")
