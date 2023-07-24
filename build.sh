@@ -1,8 +1,8 @@
 #!/bin/sh
 
-cd webhookserver
+cd alerterserver
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build
-mv -f webhookserver ../program
+mv -f alerterserver ../program
 
 cd ../webapp
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build

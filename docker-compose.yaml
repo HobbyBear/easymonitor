@@ -69,7 +69,7 @@ services:
     cpu_count: 1
   ubuntu:
     image: ubuntu
-    command: ./webhookserver
+    command: ./alerterserver
     ports:
       - "16060:16060"
     volumes:

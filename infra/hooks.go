@@ -70,7 +70,6 @@ func (h *HookDb) After(ctx context.Context, query string, args ...interface{}) (
 		tableName = tbnameInf.(string)
 		MetricMonitor.RecordClientHandlerSeconds(TypeMySQL, string(ctx.Value(ctxKeyOp).(SqlOp)), tbnameInf.(string), h.dbName, now.Sub(beginTime).Seconds())
 	}
-
 	slowquery := false
 	if now.Sub(beginTime).Seconds() >= 1 {
 		slowquery = true
