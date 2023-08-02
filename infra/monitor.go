@@ -50,7 +50,7 @@ var (
 	}, []string{"type", "name", "op", "peer"})
 )
 
-func RecordClientCount(metricType string, method string, name string, peer string) {
+func (m *metricMonitor) RecordClientCount(metricType string, method string, name string, peer string) {
 	clientHandleCounter.With(prometheus.Labels{
 		"type": metricType,
 		"op":   method,

@@ -43,7 +43,6 @@ func (h *HookDb) Before(ctx context.Context, query string, args ...interface{}) 
 	}
 	if len(tables) >= 1 {
 		ctx = context.WithValue(ctx, ctxKeyTbName, tables[0])
-		RecordClientCount(TypeMySQL, string(op), tables[0], h.dbName)
 	}
 	if op != Unknown {
 		ctx = context.WithValue(ctx, ctxKeyOp, op)
