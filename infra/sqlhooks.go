@@ -52,34 +52,13 @@ func (drv *Driver) Open(name string) (driver.Conn, error) {
 		return conn, err
 	}
 
-	// Drivers that don't implement driver.ConnBeginTx are not supported.
-	if _, ok := conn.(driver.ConnBeginTx); !ok {
-		return nil, errors.New("driver must implement driver.ConnBeginTx")
-	}
-
 	wrapped := &Conn{conn, drv.hooks}
-	if isExecer(conn) && isQueryer(conn) && isSessionResetter(conn) {
-		return &ExecerQueryerContextWithSessionResetter{wrapped,
-			&ExecerContext{wrapped}, &QueryerContext{wrapped},
-			&SessionResetter{wrapped}}, nil
-	} else if isExecer(conn) && isQueryer(conn) {
-		return &ExecerQueryerContext{wrapped, &ExecerContext{wrapped},
-			&QueryerContext{wrapped}}, nil
-	} else if isExecer(conn) {
-		// If conn implements an Execer interface, return a driver.Conn which
-		// also implements Execer
-		return &ExecerContext{wrapped}, nil
-	} else if isQueryer(conn) {
-		// If conn implements an Queryer interface, return a driver.Conn which
-		// also implements Queryer
-		return &QueryerContext{wrapped}, nil
-	}
 	return wrapped, nil
 }
 
 // Conn implements a database/sql.driver.Conn
 type Conn struct {
-	Conn  driver.Conn
+	driver.Conn
 	hooks Hooks
 }
 
@@ -88,48 +67,37 @@ func (conn *Conn) PrepareContext(ctx context.Context, query string) (driver.Stmt
 		stmt driver.Stmt
 		err  error
 	)
-
 	if c, ok := conn.Conn.(driver.ConnPrepareContext); ok {
 		stmt, err = c.PrepareContext(ctx, query)
 	} else {
 		stmt, err = conn.Prepare(query)
 	}
-
 	if err != nil {
 		if err != nil {
 			log.WithError(err).WithField("query", query).Errorf("mysqlerrlog")
 		}
 		return stmt, err
 	}
-
 	return &Stmt{stmt, conn.hooks, query}, nil
 }
 
-func (conn *Conn) Prepare(query string) (driver.Stmt, error) {
-	stmt, err := conn.Conn.Prepare(query)
-	if err != nil {
-		log.WithError(err).WithField("query", query).Errorf("mysqlerrlog")
+func (conn *Conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	if ciCtx, is := conn.Conn.(driver.ConnBeginTx); is {
+		tx, err := ciCtx.BeginTx(ctx, opts)
+		if err != nil {
+			return tx, err
+		}
+		return &DriveTx{Tx: tx, start: time.Now()}, nil
 	}
-	return stmt, err
-}
-func (conn *Conn) Close() error { return conn.Conn.Close() }
-func (conn *Conn) Begin() (driver.Tx, error) {
 	tx, err := conn.Conn.Begin()
 	if err != nil {
 		return tx, err
 	}
-	return &DriveTx{tx: tx}, nil
-}
-func (conn *Conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
-	tx, err := conn.Conn.(driver.ConnBeginTx).BeginTx(ctx, opts)
-	if err != nil {
-		return tx, err
-	}
-	return &DriveTx{tx: tx, start: time.Now()}, nil
+	return &DriveTx{Tx: tx, start: time.Now()}, nil
 }
 
 type DriveTx struct {
-	tx    driver.Tx
+	driver.Tx
 	start time.Time
 	cost  int64
 }
@@ -139,7 +107,7 @@ func getStack() *stack {
 }
 
 func (d *DriveTx) Commit() error {
-	err := d.tx.Commit()
+	err := d.Tx.Commit()
 	d.cost = time.Now().Sub(d.start).Milliseconds()
 	if d.cost > 8000 {
 		data := log.Fields{
@@ -153,7 +121,7 @@ func (d *DriveTx) Commit() error {
 }
 
 func (d *DriveTx) Rollback() error {
-	err := d.tx.Rollback()
+	err := d.Tx.Rollback()
 	d.cost = time.Now().Sub(d.start).Milliseconds()
 	if d.cost > 8000 {
 		data := log.Fields{
@@ -166,24 +134,8 @@ func (d *DriveTx) Rollback() error {
 	return err
 }
 
-// ExecerContext implements a database/sql.driver.ExecerContext
-type ExecerContext struct {
-	*Conn
-}
-
-func isExecer(conn driver.Conn) bool {
-	switch conn.(type) {
-	case driver.ExecerContext:
-		return true
-	case driver.Execer:
-		return true
-	default:
-		return false
-	}
-}
-
-func (conn *ExecerContext) execContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
-	switch c := conn.Conn.Conn.(type) {
+func (conn *Conn) execContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	switch c := conn.Conn.(type) {
 	case driver.ExecerContext:
 		return c.ExecContext(ctx, query, args)
 	case driver.Execer:
@@ -198,7 +150,7 @@ func (conn *ExecerContext) execContext(ctx context.Context, query string, args [
 	}
 }
 
-func (conn *ExecerContext) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+func (conn *Conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	var err error
 
 	list := namedToInterface(args)
@@ -220,32 +172,8 @@ func (conn *ExecerContext) ExecContext(ctx context.Context, query string, args [
 	return results, err
 }
 
-func (conn *ExecerContext) Exec(query string, args []driver.Value) (driver.Result, error) {
-	// We have to implement Exec since it is required in the current version of
-	// Go for it to run ExecContext. From Go 10 it will be optional. However,
-	// this code should never run since database/sql always prefers to run
-	// ExecContext.
-	return nil, errors.New("Exec was called when ExecContext was implemented")
-}
-
-// QueryerContext implements a database/sql.driver.QueryerContext
-type QueryerContext struct {
-	*Conn
-}
-
-func isQueryer(conn driver.Conn) bool {
-	switch conn.(type) {
-	case driver.QueryerContext:
-		return true
-	case driver.Queryer:
-		return true
-	default:
-		return false
-	}
-}
-
-func (conn *QueryerContext) queryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	switch c := conn.Conn.Conn.(type) {
+func (conn *Conn) queryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	switch c := conn.Conn.(type) {
 	case driver.QueryerContext:
 		return c.QueryContext(ctx, query, args)
 	case driver.Queryer:
@@ -260,7 +188,7 @@ func (conn *QueryerContext) queryContext(ctx context.Context, query string, args
 	}
 }
 
-func (conn *QueryerContext) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+func (conn *Conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	var err error
 
 	list := namedToInterface(args)
@@ -282,30 +210,9 @@ func (conn *QueryerContext) QueryContext(ctx context.Context, query string, args
 	return results, err
 }
 
-// ExecerQueryerContext implements database/sql.driver.ExecerContext and
-// database/sql.driver.QueryerContext
-type ExecerQueryerContext struct {
-	*Conn
-	*ExecerContext
-	*QueryerContext
-}
-
-// ExecerQueryerContext implements database/sql.driver.ExecerContext and
-// database/sql.driver.QueryerContext
-type ExecerQueryerContextWithSessionResetter struct {
-	*Conn
-	*ExecerContext
-	*QueryerContext
-	*SessionResetter
-}
-
-type SessionResetter struct {
-	*Conn
-}
-
 // Stmt implements a database/sql/driver.Stmt
 type Stmt struct {
-	Stmt  driver.Stmt
+	driver.Stmt
 	hooks Hooks
 	query string
 }
@@ -314,7 +221,6 @@ func (stmt *Stmt) execContext(ctx context.Context, args []driver.NamedValue) (dr
 	if s, ok := stmt.Stmt.(driver.StmtExecContext); ok {
 		return s.ExecContext(ctx, args)
 	}
-
 	values := make([]driver.Value, len(args))
 	for _, arg := range args {
 		values[arg.Ordinal-1] = arg.Value
@@ -379,16 +285,6 @@ func (stmt *Stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (d
 	return rows, err
 }
 
-func (stmt *Stmt) Close() error  { return stmt.Stmt.Close() }
-func (stmt *Stmt) NumInput() int { return stmt.Stmt.NumInput() }
-func (stmt *Stmt) Exec(args []driver.Value) (driver.Result, error) {
-	return stmt.Stmt.Exec(args)
-
-}
-func (stmt *Stmt) Query(args []driver.Value) (driver.Rows, error) {
-	return stmt.Stmt.Query(args)
-}
-
 // Wrap is used to create a new instrumented driver, it takes a vendor specific driver, and a Hooks instance to produce a new driver instance.
 // It's usually used inside a sql.Register() statement
 func Wrap(driver driver.Driver, hooks Hooks) driver.Driver {
@@ -413,14 +309,4 @@ func namedValueToValue(named []driver.NamedValue) ([]driver.Value, error) {
 		dargs[n] = param.Value
 	}
 	return dargs, nil
-}
-
-func isSessionResetter(conn driver.Conn) bool {
-	_, ok := conn.(driver.SessionResetter)
-	return ok
-}
-
-func (s *SessionResetter) ResetSession(ctx context.Context) error {
-	c := s.Conn.Conn.(driver.SessionResetter)
-	return c.ResetSession(ctx)
 }

@@ -52,7 +52,7 @@ func (r *redisMonitor) AddRedisHook(client *redis.Client, redisInstanceName stri
 			for _, cmd := range cmders {
 				dealKey, match := matchKey(truncateKey(100, strings.TrimSuffix(strings.TrimLeft(fmt.Sprintf("%v", cmd.Args()), "["), "]")))
 				if match {
-					RecordClientCount(TypeRedis, cmd.Name(), dealKey, redisInstanceName)
+					MetricMonitor.RecordClientCount(TypeRedis, cmd.Name(), dealKey, redisInstanceName)
 				}
 			}
 			err := oldProcess(cmders)
@@ -68,7 +68,7 @@ func (r *redisMonitor) AddRedisHook(client *redis.Client, redisInstanceName stri
 			start := time.Now()
 			dealKey, match := matchKey(truncateKey(100, strings.TrimSuffix(strings.TrimLeft(fmt.Sprintf("%v", cmd.Args()), "["), "]")))
 			if match {
-				RecordClientCount(TypeRedis, cmd.Name(), dealKey, redisInstanceName)
+				MetricMonitor.RecordClientCount(TypeRedis, cmd.Name(), dealKey, redisInstanceName)
 			}
 			err := oldProcess(cmd)
 			cacheWrapper(cmd, start, err, redisInstanceName)
