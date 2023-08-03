@@ -1,0 +1,8 @@
+go.sum
+logs/webapp.20230801.log
+logs/webapp.20230802.log
+logs/program/webapp.20230717.log
+program/alerterserver
+program/nohup.out
+program/webapp
+program/webhookserver
